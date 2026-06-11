@@ -1,6 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import { LogIn, Search, ShieldAlert, CheckCircle2, UserPlus, ArrowLeft } from '@lucide/astro';
+import { LogIn, ArrowLeft, UserPlus } from '@lucide/astro';
 ---
 
 <Layout title="Registrar Entrada" description="Registrar entrada de clientes e validação de idade.">
@@ -94,6 +94,8 @@ import { LogIn, Search, ShieldAlert, CheckCircle2, UserPlus, ArrowLeft } from '@
 </Layout>
 
 <script>
+  import { getClients, checkIn, calculateAge } from '../lib/clientDb';
+
   const searchInput = document.getElementById('search-input') as HTMLInputElement;
   const suggestionsList = document.getElementById('suggestions-list') as HTMLDivElement;
   const verificationPanel = document.getElementById('verification-panel') as HTMLDivElement;
@@ -110,23 +112,10 @@ import { LogIn, Search, ShieldAlert, CheckCircle2, UserPlus, ArrowLeft } from '@
 
   let selectedClientId = '';
 
-  // Helper to calculate age in JS
-  function calculateAge(birthDateString: string) {
-    const birthDate = new Date(birthDateString);
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
-    }
-    return age;
-  }
-
   // Handle Search Input
   if (searchInput) {
-    searchInput.addEventListener('input', async () => {
-      const query = searchInput.value.trim();
+    searchInput.addEventListener('input', () => {
+      const query = searchInput.value.trim().toLowerCase();
       
       if (query.length < 2) {
         suggestionsList.innerHTML = '';
@@ -137,46 +126,41 @@ import { LogIn, Search, ShieldAlert, CheckCircle2, UserPlus, ArrowLeft } from '@
         return;
       }
 
-      try {
-        const response = await fetch(`/api/clients?q=${encodeURIComponent(query)}`);
-        if (response.ok) {
-          const clients = await response.json();
-          
-          if (clients.length > 0) {
-            notFoundPanel.style.display = 'none';
-            suggestionsList.innerHTML = clients.map((c: any) => `
-              <div class="suggestion-item" data-id="${c.id}" data-firstname="${c.firstName}" data-lastname="${c.lastName}" data-birthdate="${c.birthDate}">
-                <span class="suggestion-name">${c.firstName} ${c.lastName}</span>
-                <span class="suggestion-dob">${new Date(c.birthDate).toLocaleDateString('pt-BR')}</span>
-              </div>
-            `).join('');
-            suggestionsList.classList.add('active');
+      // Filter local clients
+      const clients = getClients().filter(c => 
+        `${c.firstName} ${c.lastName}`.toLowerCase().includes(query)
+      );
+      
+      if (clients.length > 0) {
+        notFoundPanel.style.display = 'none';
+        suggestionsList.innerHTML = clients.map((c: any) => `
+          <div class="suggestion-item" data-id="${c.id}" data-firstname="${c.firstName}" data-lastname="${c.lastName}" data-birthdate="${c.birthDate}">
+            <span class="suggestion-name">${c.firstName} ${c.lastName}</span>
+            <span class="suggestion-dob">${new Date(c.birthDate).toLocaleDateString('pt-BR')}</span>
+          </div>
+        `).join('');
+        suggestionsList.classList.add('active');
 
-            // Add Click Handlers for suggestion items
-            const items = suggestionsList.querySelectorAll('.suggestion-item');
-            items.forEach(item => {
-              item.addEventListener('click', (e) => {
-                const target = e.currentTarget as HTMLDivElement;
-                const id = target.getAttribute('data-id') || '';
-                const firstName = target.getAttribute('data-firstname') || '';
-                const lastName = target.getAttribute('data-lastname') || '';
-                const birthDate = target.getAttribute('data-birthdate') || '';
-                
-                selectClient(id, firstName, lastName, birthDate);
-              });
-            });
+        // Add Click Handlers for suggestion items
+        const items = suggestionsList.querySelectorAll('.suggestion-item');
+        items.forEach(item => {
+          item.addEventListener('click', (e) => {
+            const target = e.currentTarget as HTMLDivElement;
+            const id = target.getAttribute('data-id') || '';
+            const firstName = target.getAttribute('data-firstname') || '';
+            const lastName = target.getAttribute('data-lastname') || '';
+            const birthDate = target.getAttribute('data-birthdate') || '';
+            
+            selectClient(id, firstName, lastName, birthDate);
+          });
+        });
 
-          } else {
-            // Not found
-            suggestionsList.innerHTML = '';
-            suggestionsList.classList.remove('active');
-            verificationPanel.style.display = 'none';
-            notFoundPanel.style.display = 'block';
-            selectedClientId = '';
-          }
-        }
-      } catch (err) {
-        console.error("Error searching clients:", err);
+      } else {
+        suggestionsList.innerHTML = '';
+        suggestionsList.classList.remove('active');
+        verificationPanel.style.display = 'none';
+        notFoundPanel.style.display = 'block';
+        selectedClientId = '';
       }
     });
     
@@ -246,31 +230,20 @@ import { LogIn, Search, ShieldAlert, CheckCircle2, UserPlus, ArrowLeft } from '@
 
   // Confirm check-in
   if (confirmBtn) {
-    confirmBtn.addEventListener('click', async () => {
+    confirmBtn.addEventListener('click', () => {
       if (!selectedClientId) return;
 
       confirmBtn.disabled = true;
       confirmBtn.textContent = 'Processando...';
 
       try {
-        const response = await fetch('/api/check-in', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ clientId: selectedClientId })
-        });
-
-        if (response.ok) {
-          window.location.href = '/';
-        } else {
-          const data = await response.json();
-          alert(`Erro no check-in: ${data.error || 'Falha desconhecida.'}`);
-          confirmBtn.disabled = false;
-          confirmBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 0.5rem;"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg> Confirmar Acesso';
-        }
-      } catch (err) {
-        console.error(err);
-        alert('Erro ao conectar com o servidor.');
+        checkIn(selectedClientId);
+        // Redirect back to dashboard
+        window.location.href = '/';
+      } catch (err: any) {
+        alert(`Erro no check-in: ${err.message || 'Falha ao registrar entrada.'}`);
         confirmBtn.disabled = false;
+        confirmBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 0.5rem;"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg> Confirmar Acesso';
       }
     });
   }

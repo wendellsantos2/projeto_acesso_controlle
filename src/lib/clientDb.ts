@@ -1,6 +1,3 @@
-import fs from 'fs';
-import path from 'path';
-
 export interface Client {
   id: string;
   firstName: string;
@@ -21,43 +18,9 @@ export interface VisitWithClient extends Visit {
   client: Client;
 }
 
-const dbPath = path.join(process.cwd(), 'src/data/db.json');
+const STORAGE_KEY = 'acesso_seguro_db';
 
-// Helper to ensure database file exists
-function ensureDb() {
-  const dir = path.dirname(dbPath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  if (!fs.existsSync(dbPath)) {
-    const defaultData = { clients: [], visits: [] };
-    fs.writeFileSync(dbPath, JSON.stringify(defaultData, null, 2), 'utf-8');
-  }
-}
-
-// Read database
-export function readDb(): { clients: Client[]; visits: Visit[] } {
-  ensureDb();
-  try {
-    const content = fs.readFileSync(dbPath, 'utf-8');
-    return JSON.parse(content);
-  } catch (error) {
-    console.error("Error reading database:", error);
-    return { clients: [], visits: [] };
-  }
-}
-
-// Write database
-export function writeDb(data: { clients: Client[]; visits: Visit[] }) {
-  ensureDb();
-  try {
-    fs.writeFileSync(dbPath, JSON.stringify(data, null, 2), 'utf-8');
-  } catch (error) {
-    console.error("Error writing to database:", error);
-  }
-}
-
-// Age calculator helper
+// Helper to calculate age in JS
 export function calculateAge(birthDateString: string, referenceDateString?: string): number {
   const birthDate = new Date(birthDateString);
   const referenceDate = referenceDateString ? new Date(referenceDateString) : new Date();
@@ -71,21 +34,126 @@ export function calculateAge(birthDateString: string, referenceDateString?: stri
   return age;
 }
 
+// Initial Mock Seed Data
+const DEFAULT_CLIENTS: Client[] = [
+  {
+    id: "c1",
+    firstName: "Ana",
+    lastName: "Silva",
+    birthDate: "1990-05-15",
+    createdAt: "2026-06-10T14:30:00.000Z"
+  },
+  {
+    id: "c2",
+    firstName: "Bruno",
+    lastName: "Santos",
+    birthDate: "2010-08-20",
+    createdAt: "2026-06-11T10:15:00.000Z"
+  },
+  {
+    id: "c3",
+    firstName: "Camila",
+    lastName: "Costa",
+    birthDate: "2000-11-02",
+    createdAt: "2026-06-11T11:00:00.000Z"
+  },
+  {
+    id: "c4",
+    firstName: "Daniel",
+    lastName: "Oliveira",
+    birthDate: "2009-02-14",
+    createdAt: "2026-06-11T12:00:00.000Z"
+  },
+  {
+    id: "c5",
+    firstName: "Eduardo",
+    lastName: "Rocha",
+    birthDate: "1985-03-30",
+    createdAt: "2026-06-11T13:00:00.000Z"
+  }
+];
+
+const DEFAULT_VISITS = (clients: Client[]): Visit[] => {
+  const now = new Date();
+  
+  const minutesAgo = (mins: number) => {
+    return new Date(now.getTime() - mins * 60 * 1000).toISOString();
+  };
+
+  return [
+    {
+      id: "v1",
+      clientId: "c1",
+      checkInAt: minutesAgo(120),
+      checkOutAt: minutesAgo(60),
+      ageAtVisit: calculateAge("1990-05-15", minutesAgo(120))
+    },
+    {
+      id: "v2",
+      clientId: "c3",
+      checkInAt: minutesAgo(90),
+      checkOutAt: minutesAgo(30),
+      ageAtVisit: calculateAge("2000-11-02", minutesAgo(90))
+    },
+    {
+      id: "v3",
+      clientId: "c2",
+      checkInAt: minutesAgo(45),
+      checkOutAt: null,
+      ageAtVisit: calculateAge("2010-08-20", minutesAgo(45))
+    },
+    {
+      id: "v4",
+      clientId: "c5",
+      checkInAt: minutesAgo(15),
+      checkOutAt: null,
+      ageAtVisit: calculateAge("1985-03-30", minutesAgo(15))
+    }
+  ];
+};
+
+// Safe Database Read
+export function readDb(): { clients: Client[]; visits: Visit[] } {
+  if (typeof window === 'undefined') {
+    return { clients: DEFAULT_CLIENTS, visits: DEFAULT_VISITS(DEFAULT_CLIENTS) };
+  }
+  
+  const content = localStorage.getItem(STORAGE_KEY);
+  if (!content) {
+    const clients = DEFAULT_CLIENTS;
+    const visits = DEFAULT_VISITS(clients);
+    const initialData = { clients, visits };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(initialData));
+    return initialData;
+  }
+
+  try {
+    return JSON.parse(content);
+  } catch (error) {
+    console.error("Error parsing localStorage db:", error);
+    return { clients: DEFAULT_CLIENTS, visits: DEFAULT_VISITS(DEFAULT_CLIENTS) };
+  }
+}
+
+// Safe Database Write
+export function writeDb(data: { clients: Client[]; visits: Visit[] }) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  }
+}
+
 // Client operations
 export function getClients(): Client[] {
-  const db = readDb();
-  return db.clients;
+  return readDb().clients;
 }
 
 export function getClientById(id: string): Client | undefined {
-  const db = readDb();
-  return db.clients.find(c => c.id === id);
+  return readDb().clients.find(c => c.id === id);
 }
 
 export function addClient(firstName: string, lastName: string, birthDate: string): Client {
   const db = readDb();
   
-  // Basic validation
   if (!firstName || !lastName || !birthDate) {
     throw new Error("Nome, sobrenome e data de nascimento são obrigatórios.");
   }
@@ -105,8 +173,7 @@ export function addClient(firstName: string, lastName: string, birthDate: string
 
 // Visit operations
 export function getVisits(): Visit[] {
-  const db = readDb();
-  return db.visits;
+  return readDb().visits;
 }
 
 export function getVisitsWithClients(): VisitWithClient[] {
@@ -138,7 +205,6 @@ export function checkIn(clientId: string): Visit {
     throw new Error("Cliente não encontrado.");
   }
 
-  // Check if client is already inside
   const activeVisit = db.visits.find(v => v.clientId === clientId && v.checkOutAt === null);
   if (activeVisit) {
     throw new Error("Cliente já está no estabelecimento (entrada ativa).");

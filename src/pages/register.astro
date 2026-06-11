@@ -1,6 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import { UserPlus, Calendar, ArrowLeft, UserCheck } from '@lucide/astro';
+import { UserPlus, ArrowLeft, UserCheck } from '@lucide/astro';
 ---
 
 <Layout title="Cadastrar Cliente" description="Cadastrar novos clientes no estabelecimento.">
@@ -106,6 +106,8 @@ import { UserPlus, Calendar, ArrowLeft, UserCheck } from '@lucide/astro';
 </Layout>
 
 <script>
+  import { addClient, checkIn, calculateAge } from '../lib/clientDb';
+
   const form = document.getElementById('register-form') as HTMLFormElement;
   const firstNameInput = document.getElementById('firstname-input') as HTMLInputElement;
   const lastNameInput = document.getElementById('lastname-input') as HTMLInputElement;
@@ -116,19 +118,6 @@ import { UserPlus, Calendar, ArrowLeft, UserCheck } from '@lucide/astro';
   const previewAge = document.getElementById('preview-age') as HTMLSpanElement;
   const previewBadge = document.getElementById('preview-badge') as HTMLSpanElement;
   const feedback = document.getElementById('register-feedback') as HTMLDivElement;
-
-  // Age Calculator
-  function calculateAge(birthDateString: string) {
-    const birthDate = new Date(birthDateString);
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
-    }
-    return age;
-  }
 
   // Handle Birthdate Input for Preview
   if (dobInput) {
@@ -162,7 +151,7 @@ import { UserPlus, Calendar, ArrowLeft, UserCheck } from '@lucide/astro';
 
   // Handle Form Submit
   if (form) {
-    form.addEventListener('submit', async (e) => {
+    form.addEventListener('submit', (e) => {
       e.preventDefault();
       
       const firstName = firstNameInput.value.trim();
@@ -176,73 +165,55 @@ import { UserPlus, Calendar, ArrowLeft, UserCheck } from '@lucide/astro';
       submitBtn.disabled = true;
       submitBtn.textContent = 'Gravando...';
       
-      feedback.style.display = 'none';
+      if (feedback) feedback.style.display = 'none';
 
-      try {
-        // Step 1: Register client
-        const clientRes = await fetch('/api/clients', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ firstName, lastName, birthDate })
-        });
+      // Let's run with a tiny delay to give a premium feel
+      setTimeout(() => {
+        try {
+          // 1. Add Client
+          const newClient = addClient(firstName, lastName, birthDate);
 
-        const clientData = await clientRes.json();
-
-        if (!clientRes.ok) {
-          throw new Error(clientData.error || 'Erro ao criar cadastro do cliente.');
-        }
-
-        // Step 2: Immediate check-in if checked
-        if (doCheckin) {
-          feedback.style.display = 'block';
-          feedback.className = 'alert-box alert-box-warning';
-          feedback.innerHTML = '<div class="alert-desc">Cadastro efetuado. Realizando check-in automático...</div>';
-
-          const checkinRes = await fetch('/api/check-in', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ clientId: clientData.id })
-          });
-
-          const checkinData = await checkinRes.json();
-
-          if (!checkinRes.ok) {
-            throw new Error(`Cadastro criado com sucesso, mas falhou ao fazer check-in: ${checkinData.error}`);
+          // 2. Immediate check-in if checked
+          if (doCheckin) {
+            checkIn(newClient.id);
           }
+
+          // Show success feedback
+          if (feedback) {
+            feedback.style.display = 'block';
+            feedback.className = 'alert-box';
+            feedback.style.backgroundColor = 'var(--success-bg)';
+            feedback.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+            feedback.style.color = 'var(--success)';
+            
+            feedback.innerHTML = `
+              <div>
+                <div class="alert-title">Cadastro Salvo com Sucesso!</div>
+                <div class="alert-desc">O cliente foi cadastrado${doCheckin ? ' e sua entrada registrada' : ''}. Redirecionando...</div>
+              </div>
+            `;
+          }
+
+          // Redirect to dashboard
+          setTimeout(() => {
+            window.location.href = '/';
+          }, 1000);
+
+        } catch (err: any) {
+          if (feedback) {
+            feedback.style.display = 'block';
+            feedback.className = 'alert-box alert-box-danger';
+            feedback.innerHTML = `
+              <div>
+                <div class="alert-title">Erro no Processamento</div>
+                <div class="alert-desc">${err.message || 'Problema ao salvar as informações.'}</div>
+              </div>
+            `;
+          }
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 0.5rem;"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg> Salvar Cadastro';
         }
-
-        // Success Feedback
-        feedback.style.display = 'block';
-        feedback.className = 'alert-box';
-        feedback.style.backgroundColor = 'var(--success-bg)';
-        feedback.style.borderColor = 'rgba(16, 185, 129, 0.3)';
-        feedback.style.color = 'var(--success)';
-        
-        feedback.innerHTML = `
-          <div>
-            <div class="alert-title">Cadastro Salvo com Sucesso!</div>
-            <div class="alert-desc">O cliente foi registrado${doCheckin ? ' e sua entrada foi efetuada' : ''}. Redirecionando...</div>
-          </div>
-        `;
-
-        // Redirect after a brief delay
-        setTimeout(() => {
-          window.location.href = '/';
-        }, 1200);
-
-      } catch (err: any) {
-        console.error(err);
-        feedback.style.display = 'block';
-        feedback.className = 'alert-box alert-box-danger';
-        feedback.innerHTML = `
-          <div>
-            <div class="alert-title">Erro no Processamento</div>
-            <div class="alert-desc">${err.message || 'Houve um problema ao salvar as informações.'}</div>
-          </div>
-        `;
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 0.5rem;"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg> Salvar Cadastro';
-      }
+      }, 500);
     });
   }
 </script>

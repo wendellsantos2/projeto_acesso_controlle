@@ -1,27 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import { getVisitsWithClients } from '../lib/db';
-import { History, Search, ArrowLeft, Filter, Calendar } from '@lucide/astro';
-
-// Query visits (sorted newest first)
-const visits = getVisitsWithClients().sort((a, b) => 
-  new Date(b.checkInAt).getTime() - new Date(a.checkInAt).getTime()
-);
-
-// Formatting helpers
-const formatDate = (isoString: string) => {
-  const date = new Date(isoString);
-  return date.toLocaleDateString('pt-BR') + ' às ' + date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-};
-
-const calculateDuration = (checkIn: string, checkOut: string | null) => {
-  if (!checkOut) return 'Em andamento';
-  const diffMs = new Date(checkOut).getTime() - new Date(checkIn).getTime();
-  const diffMins = Math.round(diffMs / 60000);
-  const hrs = Math.floor(diffMins / 60);
-  const mins = diffMins % 60;
-  return hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
-};
+import { History, Search, ArrowLeft, Filter } from '@lucide/astro';
 ---
 
 <Layout title="Histórico de Visitas" description="Histórico completo de acessos e permanência de clientes.">
@@ -72,7 +51,7 @@ const calculateDuration = (checkIn: string, checkOut: string | null) => {
           <select id="filter-age" class="input-glass" style="cursor: pointer;">
             <option value="all">Qualquer Idade</option>
             <option value="adult">Maiores (18+)</option>
-            <option value="minor">Menores (< 18)</option>
+            <option value="minor">Menores (&lt; 18)</option>
           </select>
         </div>
 
@@ -81,127 +60,155 @@ const calculateDuration = (checkIn: string, checkOut: string | null) => {
 
     <!-- Table of logs -->
     <section class="glass-card">
-      {visits.length === 0 ? (
-        <div class="text-center" style="padding: 3rem 1rem;">
-          <History size={48} class="text-muted" style="margin: 0 auto 1rem; opacity: 0.5;" />
-          <h3 class="mb-1" style="font-size: 1.2rem; color: var(--text-secondary);">Nenhum histórico registrado</h3>
-          <p style="color: var(--text-muted); font-size: 0.9rem;">Os registros de entrada e saída dos clientes aparecerão aqui.</p>
+      <div id="no-history-container" class="text-center" style="display: none; padding: 3rem 1rem;">
+        <History size={48} class="text-muted" style="margin: 0 auto 1rem; opacity: 0.5;" />
+        <h3 class="mb-1" style="font-size: 1.2rem; color: var(--text-secondary);">Nenhum histórico registrado</h3>
+        <p style="color: var(--text-muted); font-size: 0.9rem;">Os registros de entrada e saída dos clientes aparecerão aqui.</p>
+      </div>
+
+      <div id="history-table-container" style="display: none;">
+        <div class="table-wrapper">
+          <table class="glass-table" id="history-table">
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>Idade na Visita</th>
+                <th>Classificação</th>
+                <th>Horário de Entrada</th>
+                <th>Horário de Saída</th>
+                <th>Duração da Visita</th>
+              </tr>
+            </thead>
+            <tbody id="history-table-body">
+              <!-- Populate dynamically -->
+            </tbody>
+          </table>
         </div>
-      ) : (
-        <div>
-          <div class="table-wrapper">
-            <table class="glass-table" id="history-table">
-              <thead>
-                <tr>
-                  <th>Cliente</th>
-                  <th>Idade na Visita</th>
-                  <th>Classificação</th>
-                  <th>Horário de Entrada</th>
-                  <th>Horário de Saída</th>
-                  <th>Duração da Visita</th>
-                </tr>
-              </thead>
-              <tbody id="table-body">
-                {visits.map(visit => {
-                  const isMinor = visit.ageAtVisit < 18;
-                  const isInside = visit.checkOutAt === null;
-                  
-                  return (
-                    <tr 
-                      class="history-row" 
-                      data-name={`${visit.client.firstName} ${visit.client.lastName}`.toLowerCase()}
-                      data-presence={isInside ? 'inside' : 'left'}
-                      data-age={isMinor ? 'minor' : 'adult'}
-                    >
-                      <td style="font-weight: 600;">{visit.client.firstName} {visit.client.lastName}</td>
-                      <td>{visit.ageAtVisit} anos</td>
-                      <td>
-                        {isMinor ? (
-                          <span class="badge badge-danger">Menor de Idade</span>
-                        ) : (
-                          <span class="badge badge-success">Maior de Idade</span>
-                        )}
-                      </td>
-                      <td style="font-family: monospace; font-size: 0.9rem;">
-                        {formatDate(visit.checkInAt)}
-                      </td>
-                      <td style="font-family: monospace; font-size: 0.9rem;">
-                        {isInside ? (
-                          <span class="badge badge-warning">No Local</span>
-                        ) : (
-                          formatDate(visit.checkOutAt!)
-                        )}
-                      </td>
-                      <td style="font-weight: 500;">
-                        {isInside ? (
-                          <span class="badge badge-info" style="font-size: 0.7rem;">Ativo</span>
-                        ) : (
-                          calculateDuration(visit.checkInAt, visit.checkOutAt)
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <p id="no-results" class="text-center" style="display: none; padding: 2rem 0; color: var(--text-muted); font-size: 0.95rem;">
-            Nenhuma visita corresponde aos filtros aplicados.
-          </p>
-        </div>
-      )}
+        <p id="no-results" class="text-center" style="display: none; padding: 2rem 0; color: var(--text-muted); font-size: 0.95rem;">
+          Nenhuma visita corresponde aos filtros aplicados.
+        </p>
+      </div>
     </section>
 
   </div>
 </Layout>
 
 <script>
+  import { getVisitsWithClients } from '../lib/clientDb';
+
   const searchInput = document.getElementById('filter-search') as HTMLInputElement;
   const presenceFilter = document.getElementById('filter-presence') as HTMLSelectElement;
   const ageFilter = document.getElementById('filter-age') as HTMLSelectElement;
   
-  const rows = document.querySelectorAll('.history-row');
+  const historyTableContainer = document.getElementById('history-table-container') as HTMLDivElement;
+  const noHistoryContainer = document.getElementById('no-history-container') as HTMLDivElement;
+  const historyTableBody = document.getElementById('history-table-body') as HTMLTableSectionElement;
   const noResults = document.getElementById('no-results') as HTMLParagraphElement;
   const table = document.getElementById('history-table') as HTMLTableElement;
 
-  function filterTable() {
+  // Formatting helpers
+  const formatDate = (isoString: string) => {
+    const date = new Date(isoString);
+    return date.toLocaleDateString('pt-BR') + ' às ' + date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const calculateDuration = (checkIn: string, checkOut: string | null) => {
+    if (!checkOut) return 'Em andamento';
+    const diffMs = new Date(checkOut).getTime() - new Date(checkIn).getTime();
+    const diffMins = Math.round(diffMs / 60000);
+    const hrs = Math.floor(diffMins / 60);
+    const mins = diffMins % 60;
+    return hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+  };
+
+  function loadAndFilterTable() {
+    // 1. Get raw visits and sort newest first
+    const visits = getVisitsWithClients().sort((a, b) => 
+      new Date(b.checkInAt).getTime() - new Date(a.checkInAt).getTime()
+    );
+
+    if (visits.length === 0) {
+      if (historyTableContainer) historyTableContainer.style.display = 'none';
+      if (noHistoryContainer) noHistoryContainer.style.display = 'block';
+      return;
+    }
+
+    if (noHistoryContainer) noHistoryContainer.style.display = 'none';
+    if (historyTableContainer) historyTableContainer.style.display = 'block';
+
+    // 2. Read filter values
     const searchVal = searchInput ? searchInput.value.toLowerCase().trim() : '';
     const presenceVal = presenceFilter ? presenceFilter.value : 'all';
     const ageVal = ageFilter ? ageFilter.value : 'all';
-    
-    let visibleCount = 0;
 
-    rows.forEach(row => {
-      const htmlRow = row as HTMLTableRowElement;
-      const name = htmlRow.getAttribute('data-name') || '';
-      const presence = htmlRow.getAttribute('data-presence') || '';
-      const age = htmlRow.getAttribute('data-age') || '';
+    // 3. Filter rows
+    const filteredVisits = visits.filter(visit => {
+      const name = `${visit.client.firstName} ${visit.client.lastName}`.toLowerCase();
+      const isInside = visit.checkOutAt === null;
+      const isMinor = visit.ageAtVisit < 18;
 
       const matchesSearch = name.includes(searchVal);
-      const matchesPresence = presenceVal === 'all' || presence === presenceVal;
-      const matchesAge = ageVal === 'all' || age === ageVal;
+      const matchesPresence = presenceVal === 'all' || 
+                              (presenceVal === 'inside' && isInside) || 
+                              (presenceVal === 'left' && !isInside);
+      const matchesAge = ageVal === 'all' || 
+                         (ageVal === 'minor' && isMinor) || 
+                         (ageVal === 'adult' && !isMinor);
 
-      if (matchesSearch && matchesPresence && matchesAge) {
-        htmlRow.style.display = '';
-        visibleCount++;
-      } else {
-        htmlRow.style.display = 'none';
-      }
+      return matchesSearch && matchesPresence && matchesAge;
     });
 
-    if (table) {
-      if (visibleCount === 0) {
-        table.style.display = 'none';
-        if (noResults) noResults.style.display = 'block';
-      } else {
-        table.style.display = '';
-        if (noResults) noResults.style.display = 'none';
+    // 4. Render to DOM
+    if (filteredVisits.length === 0) {
+      if (table) table.style.display = 'none';
+      if (noResults) noResults.style.display = 'block';
+      if (historyTableBody) historyTableBody.innerHTML = '';
+    } else {
+      if (table) table.style.display = '';
+      if (noResults) noResults.style.display = 'none';
+      
+      if (historyTableBody) {
+        historyTableBody.innerHTML = filteredVisits.map(visit => {
+          const isMinor = visit.ageAtVisit < 18;
+          const isInside = visit.checkOutAt === null;
+
+          return `
+            <tr>
+              <td style="font-weight: 600;">${visit.client.firstName} ${visit.client.lastName}</td>
+              <td>${visit.ageAtVisit} anos</td>
+              <td>
+                ${isMinor ? 
+                  `<span class="badge badge-danger">Menor de Idade</span>` : 
+                  `<span class="badge badge-success">Maior de Idade</span>`
+                }
+              </td>
+              <td style="font-family: monospace; font-size: 0.9rem;">
+                ${formatDate(visit.checkInAt)}
+              </td>
+              <td style="font-family: monospace; font-size: 0.9rem;">
+                ${isInside ? 
+                  `<span class="badge badge-warning">No Local</span>` : 
+                  formatDate(visit.checkOutAt!)
+                }
+              </td>
+              <td style="font-weight: 500;">
+                ${isInside ? 
+                  `<span class="badge badge-info" style="font-size: 0.7rem;">Ativo</span>` : 
+                  calculateDuration(visit.checkInAt, visit.checkOutAt)
+                }
+              </td>
+            </tr>
+          `;
+        }).join('');
       }
     }
   }
 
-  // Attach event listeners
-  if (searchInput) searchInput.addEventListener('input', filterTable);
-  if (presenceFilter) presenceFilter.addEventListener('change', filterTable);
-  if (ageFilter) ageFilter.addEventListener('change', filterTable);
+  // Initial render
+  loadAndFilterTable();
+
+  // Attach event listeners for real-time local filtering
+  if (searchInput) searchInput.addEventListener('input', loadAndFilterTable);
+  if (presenceFilter) presenceFilter.addEventListener('change', loadAndFilterTable);
+  if (ageFilter) ageFilter.addEventListener('change', loadAndFilterTable);
 </script>
