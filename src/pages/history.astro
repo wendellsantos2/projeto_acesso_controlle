@@ -1,0 +1,207 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { getVisitsWithClients } from '../lib/db';
+import { History, Search, ArrowLeft, Filter, Calendar } from '@lucide/astro';
+
+// Query visits (sorted newest first)
+const visits = getVisitsWithClients().sort((a, b) => 
+  new Date(b.checkInAt).getTime() - new Date(a.checkInAt).getTime()
+);
+
+// Formatting helpers
+const formatDate = (isoString: string) => {
+  const date = new Date(isoString);
+  return date.toLocaleDateString('pt-BR') + ' às ' + date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+};
+
+const calculateDuration = (checkIn: string, checkOut: string | null) => {
+  if (!checkOut) return 'Em andamento';
+  const diffMs = new Date(checkOut).getTime() - new Date(checkIn).getTime();
+  const diffMins = Math.round(diffMs / 60000);
+  const hrs = Math.floor(diffMins / 60);
+  const mins = diffMins % 60;
+  return hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+};
+---
+
+<Layout title="Histórico de Visitas" description="Histórico completo de acessos e permanência de clientes.">
+  <div class="animate-fade-in">
+    
+    <!-- Navigation Back Link -->
+    <a href="/" style="display: inline-flex; align-items: center; gap: 0.5rem; color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem; transition: color var(--transition-fast);" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color='var(--text-muted)'">
+      <ArrowLeft size={16} /> Voltar para o Dashboard
+    </a>
+
+    <!-- Header info -->
+    <div class="flex-between mb-3">
+      <div>
+        <h1 style="font-size: 2.25rem; margin-bottom: 0.25rem;">Histórico de Acessos</h1>
+        <p style="color: var(--text-secondary);">Registro geral de entradas, saídas e tempos de permanência no estabelecimento.</p>
+      </div>
+    </div>
+
+    <!-- Filters Section -->
+    <section class="glass-card mb-3" style="padding: 1.25rem;">
+      <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: center;">
+        
+        <!-- Search bar -->
+        <div style="flex: 2; min-width: 250px; position: relative;">
+          <Search size={18} style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted);" />
+          <input 
+            type="text" 
+            id="filter-search" 
+            class="input-glass" 
+            placeholder="Filtrar por nome do cliente..." 
+            style="padding-left: 2.5rem; width: 100%;"
+          />
+        </div>
+
+        <!-- Presence filter -->
+        <div style="flex: 1; min-width: 150px; display: flex; align-items: center; gap: 0.5rem;">
+          <Filter size={16} class="text-primary" />
+          <select id="filter-presence" class="input-glass" style="cursor: pointer;">
+            <option value="all">Todas as Visitas</option>
+            <option value="inside">No Estabelecimento</option>
+            <option value="left">Já Saíram</option>
+          </select>
+        </div>
+
+        <!-- Age group filter -->
+        <div style="flex: 1; min-width: 150px; display: flex; align-items: center; gap: 0.5rem;">
+          <Filter size={16} class="text-primary" />
+          <select id="filter-age" class="input-glass" style="cursor: pointer;">
+            <option value="all">Qualquer Idade</option>
+            <option value="adult">Maiores (18+)</option>
+            <option value="minor">Menores (< 18)</option>
+          </select>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Table of logs -->
+    <section class="glass-card">
+      {visits.length === 0 ? (
+        <div class="text-center" style="padding: 3rem 1rem;">
+          <History size={48} class="text-muted" style="margin: 0 auto 1rem; opacity: 0.5;" />
+          <h3 class="mb-1" style="font-size: 1.2rem; color: var(--text-secondary);">Nenhum histórico registrado</h3>
+          <p style="color: var(--text-muted); font-size: 0.9rem;">Os registros de entrada e saída dos clientes aparecerão aqui.</p>
+        </div>
+      ) : (
+        <div>
+          <div class="table-wrapper">
+            <table class="glass-table" id="history-table">
+              <thead>
+                <tr>
+                  <th>Cliente</th>
+                  <th>Idade na Visita</th>
+                  <th>Classificação</th>
+                  <th>Horário de Entrada</th>
+                  <th>Horário de Saída</th>
+                  <th>Duração da Visita</th>
+                </tr>
+              </thead>
+              <tbody id="table-body">
+                {visits.map(visit => {
+                  const isMinor = visit.ageAtVisit < 18;
+                  const isInside = visit.checkOutAt === null;
+                  
+                  return (
+                    <tr 
+                      class="history-row" 
+                      data-name={`${visit.client.firstName} ${visit.client.lastName}`.toLowerCase()}
+                      data-presence={isInside ? 'inside' : 'left'}
+                      data-age={isMinor ? 'minor' : 'adult'}
+                    >
+                      <td style="font-weight: 600;">{visit.client.firstName} {visit.client.lastName}</td>
+                      <td>{visit.ageAtVisit} anos</td>
+                      <td>
+                        {isMinor ? (
+                          <span class="badge badge-danger">Menor de Idade</span>
+                        ) : (
+                          <span class="badge badge-success">Maior de Idade</span>
+                        )}
+                      </td>
+                      <td style="font-family: monospace; font-size: 0.9rem;">
+                        {formatDate(visit.checkInAt)}
+                      </td>
+                      <td style="font-family: monospace; font-size: 0.9rem;">
+                        {isInside ? (
+                          <span class="badge badge-warning">No Local</span>
+                        ) : (
+                          formatDate(visit.checkOutAt!)
+                        )}
+                      </td>
+                      <td style="font-weight: 500;">
+                        {isInside ? (
+                          <span class="badge badge-info" style="font-size: 0.7rem;">Ativo</span>
+                        ) : (
+                          calculateDuration(visit.checkInAt, visit.checkOutAt)
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p id="no-results" class="text-center" style="display: none; padding: 2rem 0; color: var(--text-muted); font-size: 0.95rem;">
+            Nenhuma visita corresponde aos filtros aplicados.
+          </p>
+        </div>
+      )}
+    </section>
+
+  </div>
+</Layout>
+
+<script>
+  const searchInput = document.getElementById('filter-search') as HTMLInputElement;
+  const presenceFilter = document.getElementById('filter-presence') as HTMLSelectElement;
+  const ageFilter = document.getElementById('filter-age') as HTMLSelectElement;
+  
+  const rows = document.querySelectorAll('.history-row');
+  const noResults = document.getElementById('no-results') as HTMLParagraphElement;
+  const table = document.getElementById('history-table') as HTMLTableElement;
+
+  function filterTable() {
+    const searchVal = searchInput ? searchInput.value.toLowerCase().trim() : '';
+    const presenceVal = presenceFilter ? presenceFilter.value : 'all';
+    const ageVal = ageFilter ? ageFilter.value : 'all';
+    
+    let visibleCount = 0;
+
+    rows.forEach(row => {
+      const htmlRow = row as HTMLTableRowElement;
+      const name = htmlRow.getAttribute('data-name') || '';
+      const presence = htmlRow.getAttribute('data-presence') || '';
+      const age = htmlRow.getAttribute('data-age') || '';
+
+      const matchesSearch = name.includes(searchVal);
+      const matchesPresence = presenceVal === 'all' || presence === presenceVal;
+      const matchesAge = ageVal === 'all' || age === ageVal;
+
+      if (matchesSearch && matchesPresence && matchesAge) {
+        htmlRow.style.display = '';
+        visibleCount++;
+      } else {
+        htmlRow.style.display = 'none';
+      }
+    });
+
+    if (table) {
+      if (visibleCount === 0) {
+        table.style.display = 'none';
+        if (noResults) noResults.style.display = 'block';
+      } else {
+        table.style.display = '';
+        if (noResults) noResults.style.display = 'none';
+      }
+    }
+  }
+
+  // Attach event listeners
+  if (searchInput) searchInput.addEventListener('input', filterTable);
+  if (presenceFilter) presenceFilter.addEventListener('change', filterTable);
+  if (ageFilter) ageFilter.addEventListener('change', filterTable);
+</script>

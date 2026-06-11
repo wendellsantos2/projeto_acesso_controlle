@@ -1,0 +1,440 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { getClients, getActiveVisits, getVisits, calculateAge } from '../lib/db';
+import { Users, LogIn, ShieldAlert, CalendarRange, Search, Activity, UserPlus, FileText } from '@lucide/astro';
+
+// SSR calculations
+const clients = getClients();
+const activeVisits = getActiveVisits();
+const allVisits = getVisits();
+
+// Count stats
+const totalClients = clients.length;
+const presentNowCount = activeVisits.length;
+const minorsInsideCount = activeVisits.filter(v => v.ageAtVisit < 18).length;
+
+// Today's total visits
+const todayStr = new Date().toISOString().split('T')[0];
+const todayVisitsCount = allVisits.filter(v => v.checkInAt.startsWith(todayStr)).length;
+
+// Formatter for timestamps
+const formatTime = (isoString: string) => {
+  const date = new Date(isoString);
+  return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+};
+---
+
+<Layout title="Dashboard" description="Painel de controle de acesso e frequência de clientes.">
+  <div class="animate-fade-in">
+    <!-- Welcome Header -->
+    <div class="flex-between mb-3" style="align-items: flex-start;">
+      <div>
+        <h1 style="font-size: 2.25rem; margin-bottom: 0.25rem;">Painel de Controle</h1>
+        <p style="color: var(--text-secondary);">Gerenciamento de acessos e monitoramento de presença em tempo real.</p>
+      </div>
+      <div class="badge badge-info" style="padding: 0.5rem 1rem; font-size: 0.85rem; border-radius: var(--radius-sm);">
+        <Activity size={14} style="margin-right: 0.5rem; animation: pulse 2s infinite;" />
+        Sistema Online
+      </div>
+    </div>
+
+    <!-- Stats Grid -->
+    <div class="stats-grid">
+      <div class="stat-card" style="--accent-color: var(--primary); --accent-glow: var(--primary-glow);">
+        <div class="stat-icon-wrapper">
+          <Users size={24} />
+        </div>
+        <div class="stat-info">
+          <span class="stat-value">{totalClients}</span>
+          <span class="stat-label">Clientes Cadastrados</span>
+        </div>
+      </div>
+
+      <div class="stat-card" style="--accent-color: var(--success); --accent-glow: var(--success-glow);">
+        <div class="stat-icon-wrapper">
+          <LogIn size={24} />
+        </div>
+        <div class="stat-info">
+          <span class="stat-value" id="present-count">{presentNowCount}</span>
+          <span class="stat-label">Presentes Agora</span>
+        </div>
+      </div>
+
+      <div class="stat-card" style="--accent-color: {minorsInsideCount > 0 ? 'var(--danger)' : 'var(--warning)'}; --accent-glow: {minorsInsideCount > 0 ? 'var(--danger-glow)' : 'var(--warning-glow)'};">
+        <div class="stat-icon-wrapper" style={minorsInsideCount > 0 ? "color: var(--danger); background: var(--danger-glow);" : "color: var(--warning); background: var(--warning-glow);"}>
+          <ShieldAlert size={24} />
+        </div>
+        <div class="stat-info">
+          <span class="stat-value">{minorsInsideCount}</span>
+          <span class="stat-label">Menores no Local</span>
+        </div>
+      </div>
+
+      <div class="stat-card" style="--accent-color: var(--primary); --accent-glow: var(--primary-glow);">
+        <div class="stat-icon-wrapper">
+          <CalendarRange size={24} />
+        </div>
+        <div class="stat-info">
+          <span class="stat-value">{todayVisitsCount}</span>
+          <span class="stat-label">Visitas Hoje</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Content Layout -->
+    <div class="dashboard-grid">
+      
+      <!-- Present Clients (Col-8) -->
+      <section class="glass-card col-8">
+        <h2 class="mb-2" style="font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem;">
+          <Activity size={20} class="text-primary" /> Clientes no Estabelecimento
+        </h2>
+        <p style="color: var(--text-muted); margin-bottom: 1.5rem;">Lista de clientes que estão no local. Registre a saída ao final da visita.</p>
+
+        {activeVisits.length === 0 ? (
+          <div class="text-center" style="padding: 3rem 1rem; border: 1px dashed var(--border-glass); border-radius: var(--radius-md);">
+            <LogIn size={48} class="text-muted" style="margin: 0 auto 1rem; opacity: 0.5;" />
+            <h3 class="mb-1" style="font-size: 1.2rem; color: var(--text-secondary);">Nenhum cliente no local</h3>
+            <p class="mb-2" style="color: var(--text-muted); font-size: 0.9rem;">Registre a entrada de um cliente para monitorar sua permanência.</p>
+            <a href="/check-in" class="btn btn-primary btn-sm">Registrar Entrada</a>
+          </div>
+        ) : (
+          <div class="table-wrapper">
+            <table class="glass-table">
+              <thead>
+                <tr>
+                  <th>Nome do Cliente</th>
+                  <th>Idade</th>
+                  <th>Status de Idade</th>
+                  <th>Horário de Entrada</th>
+                  <th style="text-align: right;">Ação</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activeVisits.map(visit => {
+                  const isMinor = visit.ageAtVisit < 18;
+                  return (
+                    <tr>
+                      <td style="font-weight: 600;">{visit.client.firstName} {visit.client.lastName}</td>
+                      <td>{visit.ageAtVisit} anos</td>
+                      <td>
+                        {isMinor ? (
+                          <span class="badge badge-danger">Menor de Idade</span>
+                        ) : (
+                          <span class="badge badge-success">Maior de Idade</span>
+                        )}
+                      </td>
+                      <td style="font-family: monospace; font-size: 0.95rem;">
+                        {formatTime(visit.checkInAt)}
+                      </td>
+                      <td style="text-align: right;">
+                        <button 
+                          class="btn btn-danger btn-sm checkout-btn" 
+                          data-visit-id={visit.id}
+                          data-client-name={`${visit.client.firstName} ${visit.client.lastName}`}
+                        >
+                          Registrar Saída
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <!-- Sidebar / Quick Actions (Col-4) -->
+      <div class="col-4" style="display: flex; flex-direction: column; gap: 1.5rem;">
+        
+        <!-- Quick Actions Card -->
+        <section class="glass-card">
+          <h2 class="mb-2" style="font-size: 1.3rem;">Acesso Rápido</h2>
+          <div style="display: flex; flex-direction: column; gap: 0.85rem; margin-top: 1rem;">
+            <a href="/check-in" class="btn btn-primary" style="justify-content: flex-start; width: 100%;">
+              <LogIn size={18} /> Registrar Entrada
+            </a>
+            <a href="/register" class="btn btn-secondary" style="justify-content: flex-start; width: 100%;">
+              <UserPlus size={18} /> Cadastrar Cliente
+            </a>
+            <a href="/history" class="btn btn-secondary" style="justify-content: flex-start; width: 100%;">
+              <FileText size={18} /> Histórico de Visitas
+            </a>
+          </div>
+        </section>
+
+        <!-- Simulated Biometric Reader Card -->
+        <section class="glass-card" style="border-color: rgba(99, 102, 241, 0.25);">
+          <h2 class="mb-1" style="font-size: 1.3rem; display: flex; align-items: center; gap: 0.5rem;">
+            <Search size={18} class="text-primary" /> Simulador Biométrico
+          </h2>
+          <p class="mb-2" style="color: var(--text-muted); font-size: 0.85rem;">
+            Simula um leitor biométrico ou de cartões. Digite o nome de um cliente e aperte Enter para alternar presença (entrada/saída).
+          </p>
+
+          <form id="biometric-form" style="margin-top: 1rem;">
+            <div class="form-group" style="margin-bottom: 0.75rem;">
+              <div class="search-wrapper">
+                <input 
+                  type="text" 
+                  id="biometric-input" 
+                  class="input-glass" 
+                  placeholder="Nome do cliente cadastrado..." 
+                  autocomplete="off"
+                  required
+                />
+                <div id="biometric-suggestions" class="suggestions-dropdown"></div>
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm" style="width: 100%;">Processar Leitura</button>
+          </form>
+          <div id="biometric-feedback" style="margin-top: 0.75rem; display: none;"></div>
+        </section>
+
+      </div>
+    </div>
+  </div>
+</Layout>
+
+<script>
+  // Handlers for manual Checkout
+  const checkoutButtons = document.querySelectorAll('.checkout-btn');
+  checkoutButtons.forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const button = e.currentTarget as HTMLButtonElement;
+      const visitId = button.getAttribute('data-visit-id');
+      const clientName = button.getAttribute('data-client-name');
+      
+      if (!visitId) return;
+      
+      button.disabled = true;
+      button.textContent = "Processando...";
+      
+      try {
+        const response = await fetch('/api/check-out', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ visitId })
+        });
+        
+        if (response.ok) {
+          window.location.reload();
+        } else {
+          const data = await response.json();
+          alert(`Erro: ${data.error || 'Falha ao registrar saída.'}`);
+          button.disabled = false;
+          button.textContent = "Registrar Saída";
+        }
+      } catch (error) {
+        console.error("Error checking out:", error);
+        alert("Erro de conexão com o servidor.");
+        button.disabled = false;
+        button.textContent = "Registrar Saída";
+      }
+    });
+  });
+
+  // Simulated Biometric Reader input handler
+  const bioInput = document.getElementById('biometric-input') as HTMLInputElement;
+  const bioSuggestions = document.getElementById('biometric-suggestions') as HTMLDivElement;
+  const bioForm = document.getElementById('biometric-form') as HTMLFormElement;
+  const bioFeedback = document.getElementById('biometric-feedback') as HTMLDivElement;
+  
+  let selectedClientId = '';
+
+  if (bioInput) {
+    bioInput.addEventListener('input', async () => {
+      const val = bioInput.value.trim();
+      if (val.length < 2) {
+        bioSuggestions.innerHTML = '';
+        bioSuggestions.classList.remove('active');
+        selectedClientId = '';
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/clients?q=${encodeURIComponent(val)}`);
+        if (response.ok) {
+          const clients = await response.json();
+          if (clients.length > 0) {
+            bioSuggestions.innerHTML = clients.map((c: any) => `
+              <div class="suggestion-item" data-id="${c.id}" data-name="${c.firstName} ${c.lastName}">
+                <span class="suggestion-name">${c.firstName} ${c.lastName}</span>
+                <span class="suggestion-dob">${new Date(c.birthDate).toLocaleDateString('pt-BR')}</span>
+              </div>
+            `).join('');
+            bioSuggestions.classList.add('active');
+            
+            // Attach item clicks
+            const items = bioSuggestions.querySelectorAll('.suggestion-item');
+            items.forEach(item => {
+              item.addEventListener('click', (e) => {
+                const target = e.currentTarget as HTMLDivElement;
+                const id = target.getAttribute('data-id') || '';
+                const name = target.getAttribute('data-name') || '';
+                bioInput.value = name;
+                selectedClientId = id;
+                bioSuggestions.innerHTML = '';
+                bioSuggestions.classList.remove('active');
+              });
+            });
+          } else {
+            bioSuggestions.innerHTML = '<div class="suggestion-item"><span class="suggestion-dob">Nenhum cliente encontrado</span></div>';
+            bioSuggestions.classList.add('active');
+            selectedClientId = '';
+          }
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    });
+
+    // Close suggestion list when clicking outside
+    document.addEventListener('click', (e) => {
+      if (e.target !== bioInput && e.target !== bioSuggestions) {
+        bioSuggestions.classList.remove('active');
+      }
+    });
+  }
+
+  // Handle Biometric simulation submission
+  if (bioForm) {
+    bioForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const clientName = bioInput.value.trim();
+      if (!clientName) return;
+
+      bioFeedback.style.display = 'block';
+      bioFeedback.className = 'alert-box alert-box-warning';
+      bioFeedback.innerHTML = '<div class="alert-desc">Processando leitura digital...</div>';
+
+      try {
+        let clientIdToUse = selectedClientId;
+
+        // If user just typed a name without selecting suggestions, resolve by searching
+        if (!clientIdToUse) {
+          const searchRes = await fetch(`/api/clients?q=${encodeURIComponent(clientName)}`);
+          if (searchRes.ok) {
+            const results = await searchRes.json();
+            if (results.length === 1) {
+              clientIdToUse = results[0].id;
+            } else if (results.length > 1) {
+              bioFeedback.className = 'alert-box alert-box-danger';
+              bioFeedback.innerHTML = `
+                <div>
+                  <div class="alert-title">Multiplos clientes encontrados</div>
+                  <div class="alert-desc">Por favor, selecione um na lista de sugestões para evitar ambiguidades.</div>
+                </div>
+              `;
+              return;
+            }
+          }
+        }
+
+        if (!clientIdToUse) {
+          bioFeedback.className = 'alert-box alert-box-danger';
+          bioFeedback.innerHTML = `
+            <div>
+              <div class="alert-title">Cliente não encontrado</div>
+              <div class="alert-desc">Nenhum cliente cadastrado com o nome "${clientName}". Cadastre-o primeiro.</div>
+            </div>
+          `;
+          return;
+        }
+
+        // Determine if they are checking in or checking out
+        // Let's ask the page if this clientId is in the table (by querying active presence or API)
+        // Wait, a clean way is to try check-out first; if it fails saying they aren't inside, then perform check-in!
+        // That is a perfect "smart biometric scanner" behavior: it toggles entry/exit!
+        
+        let operation = '';
+        let res = await fetch('/api/check-out', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clientId: clientIdToUse })
+        });
+
+        if (res.ok) {
+          operation = 'checkout';
+        } else {
+          // Check-out failed, so try check-in
+          res = await fetch('/api/check-in', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ clientId: clientIdToUse })
+          });
+          if (res.ok) {
+            operation = 'checkin';
+          }
+        }
+
+        const data = await res.json();
+        
+        if (res.ok) {
+          bioFeedback.className = 'alert-box alert-box-warning';
+          bioFeedback.style.backgroundColor = 'var(--success-bg)';
+          bioFeedback.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+          bioFeedback.style.color = 'var(--success)';
+          
+          if (operation === 'checkout') {
+            bioFeedback.innerHTML = `
+              <div>
+                <div class="alert-title">Saída Registrada!</div>
+                <div class="alert-desc">Até logo! A saída do cliente foi registrada com sucesso.</div>
+              </div>
+            `;
+          } else {
+            // Check check-in age warning
+            const isMinor = data.ageAtVisit < 18;
+            if (isMinor) {
+              bioFeedback.className = 'alert-box alert-box-danger';
+              bioFeedback.innerHTML = `
+                <div>
+                  <div class="alert-title">Entrada com Alerta (Menor de 18)!</div>
+                  <div class="alert-desc">Acesso Liberado, mas atenção: o cliente tem ${data.ageAtVisit} anos.</div>
+                </div>
+              `;
+            } else {
+              bioFeedback.innerHTML = `
+                <div>
+                  <div class="alert-title">Entrada Registrada!</div>
+                  <div class="alert-desc">Bem-vindo! Acesso autorizado (${data.ageAtVisit} anos).</div>
+                </div>
+              `;
+            }
+          }
+          
+          // Clear inputs and reload page to update tables after 1.5 seconds
+          bioInput.value = '';
+          selectedClientId = '';
+          setTimeout(() => {
+            window.location.reload();
+          }, 1500);
+
+        } else {
+          bioFeedback.className = 'alert-box alert-box-danger';
+          bioFeedback.innerHTML = `
+            <div>
+              <div class="alert-title">Erro de Acesso</div>
+              <div class="alert-desc">${data.error || 'Ocorreu um erro no processamento biométrico.'}</div>
+            </div>
+          `;
+        }
+
+      } catch (err) {
+        console.error(err);
+        bioFeedback.className = 'alert-box alert-box-danger';
+        bioFeedback.innerHTML = '<div class="alert-desc">Erro ao conectar com o terminal biométrico.</div>';
+      }
+    });
+  }
+</script>
+
+<style>
+  @keyframes pulse {
+    0% { opacity: 0.6; }
+    50% { opacity: 1; }
+    100% { opacity: 0.6; }
+  }
+</style>

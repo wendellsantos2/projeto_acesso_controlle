@@ -1,0 +1,81 @@
+---
+import '../styles/global.css';
+import { Users, LogIn, History, Shield } from '@lucide/astro';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description = "Sistema de Gestão de Clientes e Controle de Frequência" } = Astro.props;
+const pathname = Astro.url.pathname;
+
+// Helper to determine if a route is active
+const isActive = (path: string) => {
+  if (path === '/' && pathname === '/') return 'active';
+  if (path !== '/' && pathname.startsWith(path)) return 'active';
+  return '';
+};
+---
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title} | AcessoSeguro</title>
+    <meta name="description" content={description} />
+    
+    <!-- Open Graph / SEO -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={`${title} | AcessoSeguro`} />
+    <meta property="og:description" content={description} />
+  </head>
+  <body>
+    <header class="header-glass">
+      <div class="container header-container">
+        <a href="/" class="logo-group">
+          <Shield size={26} class="text-primary" />
+          <span class="logo-title">AcessoSeguro</span>
+        </a>
+        
+        <nav>
+          <ul class="nav-links">
+            <li>
+              <a href="/" class={`nav-link ${isActive('/')}`} id="nav-dashboard">
+                Dashboard
+              </a>
+            </li>
+            <li>
+              <a href="/check-in" class={`nav-link ${isActive('/check-in')}`} id="nav-checkin">
+                Registrar Entrada
+              </a>
+            </li>
+            <li>
+              <a href="/register" class={`nav-link ${isActive('/register')}`} id="nav-register">
+                Cadastrar Cliente
+              </a>
+            </li>
+            <li>
+              <a href="/history" class={`nav-link ${isActive('/history')}`} id="nav-history">
+                Histórico
+              </a>
+            </li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container mt-2">
+      <slot />
+    </main>
+
+    <footer>
+      <div class="container">
+        <p>&copy; {new Date().getFullYear()} AcessoSeguro - Sistema de Gestão de Clientes & Controle de Acesso</p>
+      </div>
+    </footer>
+  </body>
+</html>

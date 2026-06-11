@@ -1,0 +1,248 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { UserPlus, Calendar, ArrowLeft, UserCheck } from '@lucide/astro';
+---
+
+<Layout title="Cadastrar Cliente" description="Cadastrar novos clientes no estabelecimento.">
+  <div class="animate-fade-in" style="max-width: 600px; margin: 2rem auto 0;">
+    
+    <!-- Navigation Back Link -->
+    <a href="/" style="display: inline-flex; align-items: center; gap: 0.5rem; color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem; transition: color var(--transition-fast);" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color='var(--text-muted)'">
+      <ArrowLeft size={16} /> Voltar para o Dashboard
+    </a>
+
+    <div class="glass-card">
+      <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem;">
+        <div class="stat-icon-wrapper" style="--accent-color: var(--primary); --accent-glow: var(--primary-glow); width: 42px; height: 42px; border-radius: var(--radius-sm);">
+          <UserPlus size={20} />
+        </div>
+        <div>
+          <h2 style="font-size: 1.5rem;">Cadastrar Cliente</h2>
+          <p style="color: var(--text-secondary); font-size: 0.85rem;">Insira os dados do novo cliente para cadastrá-lo no sistema.</p>
+        </div>
+      </div>
+
+      <!-- Registration Form -->
+      <form id="register-form" style="display: flex; flex-direction: column; gap: 1.25rem;">
+        
+        <!-- Name Grid -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="firstname-input" class="form-label">Nome</label>
+            <input 
+              type="text" 
+              id="firstname-input" 
+              class="input-glass" 
+              placeholder="Ex: João" 
+              required 
+            />
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="lastname-input" class="form-label">Sobrenome</label>
+            <input 
+              type="text" 
+              id="lastname-input" 
+              class="input-glass" 
+              placeholder="Ex: Silva" 
+              required 
+            />
+          </div>
+        </div>
+
+        <!-- Date of Birth -->
+        <div class="form-group" style="margin-bottom: 0;">
+          <label for="dob-input" class="form-label">Data de Nascimento</label>
+          <input 
+            type="date" 
+            id="dob-input" 
+            class="input-glass" 
+            required 
+          />
+        </div>
+
+        <!-- Real-time Age Preview Panel (hidden by default) -->
+        <div id="age-preview-panel" style="display: none; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-glass); border-radius: var(--radius-sm); padding: 0.75rem 1rem;">
+          <div class="flex-between">
+            <span style="font-size: 0.9rem; color: var(--text-secondary);">Idade Calculada:</span>
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+              <span id="preview-age" style="font-weight: 700; font-size: 1rem; color: var(--text-primary);">0 anos</span>
+              <span id="preview-badge" class="badge"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Immediate Check-in Option -->
+        <div style="background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.15); border-radius: var(--radius-sm); padding: 0.75rem 1rem; display: flex; align-items: flex-start; gap: 0.75rem;">
+          <input 
+            type="checkbox" 
+            id="immediate-checkin" 
+            style="width: 18px; height: 18px; margin-top: 0.2rem; cursor: pointer; accent-color: var(--primary);" 
+            checked
+          />
+          <div style="cursor: pointer;" onclick="document.getElementById('immediate-checkin').click()">
+            <label for="immediate-checkin" style="font-weight: 600; font-size: 0.9rem; color: var(--text-primary); cursor: pointer;">
+              Registrar Entrada Imediata
+            </label>
+            <p style="color: var(--text-muted); font-size: 0.8rem; margin-top: 0.15rem;">
+              Realiza o check-in do cliente automaticamente no estabelecimento logo após a criação do cadastro.
+            </p>
+          </div>
+        </div>
+
+        <!-- Submit Buttons -->
+        <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+          <a href="/" class="btn btn-secondary" style="flex: 1; text-align: center;">Cancelar</a>
+          <button type="submit" class="btn btn-primary" style="flex: 2;">
+            <UserCheck size={18} /> Salvar Cadastro
+          </button>
+        </div>
+      </form>
+
+      <!-- Feedback Alert -->
+      <div id="register-feedback" style="margin-top: 1rem; display: none;"></div>
+
+    </div>
+  </div>
+</Layout>
+
+<script>
+  const form = document.getElementById('register-form') as HTMLFormElement;
+  const firstNameInput = document.getElementById('firstname-input') as HTMLInputElement;
+  const lastNameInput = document.getElementById('lastname-input') as HTMLInputElement;
+  const dobInput = document.getElementById('dob-input') as HTMLInputElement;
+  const immediateCheckin = document.getElementById('immediate-checkin') as HTMLInputElement;
+  
+  const agePreviewPanel = document.getElementById('age-preview-panel') as HTMLDivElement;
+  const previewAge = document.getElementById('preview-age') as HTMLSpanElement;
+  const previewBadge = document.getElementById('preview-badge') as HTMLSpanElement;
+  const feedback = document.getElementById('register-feedback') as HTMLDivElement;
+
+  // Age Calculator
+  function calculateAge(birthDateString: string) {
+    const birthDate = new Date(birthDateString);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
+  }
+
+  // Handle Birthdate Input for Preview
+  if (dobInput) {
+    dobInput.addEventListener('change', () => {
+      const dobVal = dobInput.value;
+      if (!dobVal) {
+        agePreviewPanel.style.display = 'none';
+        return;
+      }
+
+      const age = calculateAge(dobVal);
+      if (isNaN(age)) {
+        agePreviewPanel.style.display = 'none';
+        return;
+      }
+
+      previewAge.textContent = `${age} ${age === 1 ? 'ano' : 'anos'}`;
+      
+      const isMinor = age < 18;
+      if (isMinor) {
+        previewBadge.className = 'badge badge-danger';
+        previewBadge.textContent = 'Menor de Idade';
+      } else {
+        previewBadge.className = 'badge badge-success';
+        previewBadge.textContent = 'Maior de Idade';
+      }
+
+      agePreviewPanel.style.display = 'block';
+    });
+  }
+
+  // Handle Form Submit
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const firstName = firstNameInput.value.trim();
+      const lastName = lastNameInput.value.trim();
+      const birthDate = dobInput.value;
+      const doCheckin = immediateCheckin.checked;
+
+      if (!firstName || !lastName || !birthDate) return;
+
+      const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Gravando...';
+      
+      feedback.style.display = 'none';
+
+      try {
+        // Step 1: Register client
+        const clientRes = await fetch('/api/clients', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ firstName, lastName, birthDate })
+        });
+
+        const clientData = await clientRes.json();
+
+        if (!clientRes.ok) {
+          throw new Error(clientData.error || 'Erro ao criar cadastro do cliente.');
+        }
+
+        // Step 2: Immediate check-in if checked
+        if (doCheckin) {
+          feedback.style.display = 'block';
+          feedback.className = 'alert-box alert-box-warning';
+          feedback.innerHTML = '<div class="alert-desc">Cadastro efetuado. Realizando check-in automático...</div>';
+
+          const checkinRes = await fetch('/api/check-in', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ clientId: clientData.id })
+          });
+
+          const checkinData = await checkinRes.json();
+
+          if (!checkinRes.ok) {
+            throw new Error(`Cadastro criado com sucesso, mas falhou ao fazer check-in: ${checkinData.error}`);
+          }
+        }
+
+        // Success Feedback
+        feedback.style.display = 'block';
+        feedback.className = 'alert-box';
+        feedback.style.backgroundColor = 'var(--success-bg)';
+        feedback.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+        feedback.style.color = 'var(--success)';
+        
+        feedback.innerHTML = `
+          <div>
+            <div class="alert-title">Cadastro Salvo com Sucesso!</div>
+            <div class="alert-desc">O cliente foi registrado${doCheckin ? ' e sua entrada foi efetuada' : ''}. Redirecionando...</div>
+          </div>
+        `;
+
+        // Redirect after a brief delay
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 1200);
+
+      } catch (err: any) {
+        console.error(err);
+        feedback.style.display = 'block';
+        feedback.className = 'alert-box alert-box-danger';
+        feedback.innerHTML = `
+          <div>
+            <div class="alert-title">Erro no Processamento</div>
+            <div class="alert-desc">${err.message || 'Houve um problema ao salvar as informações.'}</div>
+          </div>
+        `;
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 0.5rem;"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg> Salvar Cadastro';
+      }
+    });
+  }
+</script>
